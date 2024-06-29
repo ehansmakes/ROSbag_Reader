@@ -1,0 +1,121 @@
+# Import needed modules for deserialize the data
+from pathlib import Path
+from rosbags.highlevel import AnyReader
+from rosbags.typesys import Stores, get_typestore
+
+# Import pandas modules to create a dataframe
+import pandas as pd
+
+
+# Create and Start a process timer 
+import time
+start_time = time.time()
+
+
+# Set the file path of your ROSbag file
+# A ROSbag file should include a 'metadata.yaml' and 'bag_file_name.db3' 
+bagpath = Path(r"C:\Users\ehans\OneDrive\Desktop\ROS_DeSerializer\Bag_Saves\week_2_data\week_2_static_3")
+save_path = r"C:\Users\ehans\OneDrive\Desktop\ROS_DeSerializer\Bag_Saves\week_2_data\week_2_static_3"
+file_name = 'week_2_static_3'  # This dictates .csv file name and the title of the plot. 
+
+# Author's note -----> How can 
+
+# Create blank lists to input data 
+# Yes, this is a bit clunky, but the process is a faster than using append to dictionary
+time_header = [] 
+ackermann_speed = []
+lidar_speed = []
+arduino_wheel_speed = []
+arduino_acceleration_x = []
+arduino_acceleration_y = []
+steering_angle_degrees = []
+
+# Create a type store to use if the bag has no message definitions.
+# The 
+typestore = get_typestore(Stores.ROS2_FOXY)
+
+
+# Create reader instance and open for reading.
+with AnyReader([bagpath], default_typestore=typestore) as reader:
+    connections = [x for x in reader.connections if x.topic == r"/CompareVelocities"]
+    for connection, timestamp, rawdata in reader.messages(connections=connections):
+         msg = reader.deserialize(rawdata, connection.msgtype)
+
+# Deserialize the data from the following topic messages and place them in their coresponding lists
+
+         time_header = time_header + [str(msg.header.stamp)]
+         ackermann_speed = ackermann_speed + [msg.twist.linear.x]
+         lidar_speed = lidar_speed + [msg.twist.linear.y]
+         arduino_wheel_speed = arduino_wheel_speed + [msg.twist.linear.z]
+         arduino_acceleration_x = arduino_acceleration_x + [msg.twist.angular.x]
+         arduino_acceleration_y = arduino_acceleration_y + [msg.twist.angular.y]
+         steering_angle_degrees = steering_angle_degrees + [msg.twist.angular.z]
+         
+
+
+# AUTHOR'S NOTE - I am still working on a script that will provide the recorded time steps.
+# The issue is that the data for time_header has the time data embedded inside a string. 
+# For now, I will be approximating each time step as 0.1 seconds. 
+time_step = []
+
+for i in range(len(ackermann_speed)):
+     time_step.append(i/20)     
+
+
+# Create a dictionary of the lists  
+dict = { 'time' : time_step, 'eRPM Speed' : ackermann_speed, 'Lidar Speed' : lidar_speed, 'Wheel Encoder Speed' : arduino_wheel_speed,
+        'IMU Acceleration-x' : arduino_acceleration_x, 'IMU Acceleration-y' : arduino_acceleration_x, 
+        'Steering Angle' : steering_angle_degrees   
+}
+
+# Transfer the dictionary to a dataframe
+df = pd.DataFrame(data=dict)
+
+
+# Record dictionary as a CSV file
+df = df.to_csv(f'{save_path}' f'{file_name}.csv', index=False)  
+
+
+
+########################################################################
+######################### PLOTTING ZONE ################################
+########################################################################
+# Author's note, I plan to move this as a function 
+
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation 
+
+"""
+i = 0 
+
+while i < len(time_step):
+
+     print(time_step[i])
+     print(arduino_wheel_speed[i])
+     i += 1
+"""
+
+
+# Plotting
+plt.figure(file_name)
+
+#plt.plot(time_step, lidar_speed, label='lidar_speed w/ sliding avg')
+#plt.plot(time_step, ackermann_speed, label='ackermann_speed')
+#plt.plot(time_step, arduino_wheel_speed, label='arduino_wheel_speed')
+plt.plot(time_step, arduino_acceleration_x, label='arduino_acceleration_x')
+plt.plot(time_step, arduino_acceleration_y, label='arduino_acceleration_y')
+# plt.plot(time_step, steering_angle_degrees, label='steering_angle_degrees')
+
+# Adding labels and title
+plt.xlabel('Time Step (seconds)')
+plt.ylabel('Angular Acceleration (rad/s^2)')
+plt.title(file_name)
+
+# Adding legend
+plt.legend()
+
+# Show plot
+plt.show()
+
+# Stop process stopwatch
+print("Process finished --- %s seconds ---" % (time.time() - start_time))
